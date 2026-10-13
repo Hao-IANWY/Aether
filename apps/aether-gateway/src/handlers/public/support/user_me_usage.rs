@@ -166,6 +166,26 @@ fn parse_users_me_usage_timeline_limit(query: Option<&str>) -> Result<usize, Str
     }
 }
 
+/// 解析时间线端点的文本筛选参数（model / provider / api_format），空值视为未筛选。
+fn parse_users_me_usage_timeline_text_filter(
+    query: Option<&str>,
+    key: &str,
+) -> Result<Option<String>, String> {
+    match query_param_value(query, key) {
+        Some(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                return Ok(None);
+            }
+            if trimmed.len() > 200 {
+                return Err(format!("{key} must be at most 200 characters"));
+            }
+            Ok(Some(trimmed.to_string()))
+        }
+        None => Ok(None),
+    }
+}
+
 fn parse_users_me_usage_ids(query: Option<&str>) -> Result<Option<BTreeSet<String>>, String> {
     let Some(ids) = query_param_value(query, "ids") else {
         return Ok(None);
@@ -1544,6 +1564,18 @@ pub(super) async fn handle_users_me_usage_interval_timeline_get(
         Ok(value) => value,
         Err(detail) => return admin_stats_bad_request_response(detail),
     };
+    let model = match parse_users_me_usage_timeline_text_filter(query, "model") {
+        Ok(value) => value,
+        Err(detail) => return admin_stats_bad_request_response(detail),
+    };
+    let provider = match parse_users_me_usage_timeline_text_filter(query, "provider") {
+        Ok(value) => value,
+        Err(detail) => return admin_stats_bad_request_response(detail),
+    };
+    let api_format = match parse_users_me_usage_timeline_text_filter(query, "api_format") {
+        Ok(value) => value,
+        Err(detail) => return admin_stats_bad_request_response(detail),
+    };
     let now_unix_secs = u64::try_from(Utc::now().timestamp()).unwrap_or_default();
     let created_from_unix_secs = now_unix_secs.saturating_sub(u64::from(hours) * 3600);
 
@@ -1554,6 +1586,9 @@ pub(super) async fn handle_users_me_usage_interval_timeline_get(
             group_by: UsageCacheAffinityIntervalGroupBy::User,
             user_id: Some(auth.user.id.clone()),
             api_key_id: None,
+            model,
+            provider,
+            api_format,
         })
         .await
     {

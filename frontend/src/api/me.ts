@@ -589,6 +589,9 @@ export const meApi = {
   async getIntervalTimeline(params?: {
     hours?: number
     limit?: number
+    model?: string
+    provider?: string
+    api_format?: string
   }): Promise<{
     analysis_period_hours: number
     total_points: number

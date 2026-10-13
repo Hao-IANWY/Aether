@@ -7023,6 +7023,117 @@ async fn gateway_samples_users_me_usage_interval_timeline_across_full_window_whe
 }
 
 #[tokio::test]
+async fn gateway_filters_users_me_usage_interval_timeline_by_model_provider_api_format() {
+    let now = Utc::now();
+    let user = sample_auth_user(now);
+    let access_token = build_test_auth_token(
+        "access",
+        serde_json::Map::from_iter([
+            ("user_id".to_string(), json!(user.id)),
+            ("role".to_string(), json!(user.role)),
+            (
+                "created_at".to_string(),
+                json!(user.created_at.map(|value| value.to_rfc3339())),
+            ),
+            (
+                "session_id".to_string(),
+                json!("session-users-me-usage-timeline-filters"),
+            ),
+        ]),
+        now + chrono::Duration::hours(1),
+    );
+    let mut seeded = Vec::new();
+    for index in 0..12_i64 {
+        let (model, provider) = if index < 8 {
+            ("gpt-4.1", "OpenAI")
+        } else {
+            ("claude-x", "Anthropic")
+        };
+        seeded.push(sample_user_usage_audit(
+            &format!("usage-users-me-timeline-filters-{index}"),
+            &format!("req-users-me-timeline-filters-{index}"),
+            "user-auth-1",
+            model,
+            provider,
+            "completed",
+            now - chrono::Duration::minutes(13 - index),
+        ));
+    }
+    let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(seeded));
+    let (gateway_url, upstream_hits, gateway_handle, upstream_handle) =
+        start_auth_gateway_with_usage_state(
+            user,
+            sample_auth_wallet("user-auth-1", now),
+            [sample_auth_session(
+                "user-auth-1",
+                "session-users-me-usage-timeline-filters",
+                "device-users-me-usage-timeline-filters",
+                "refresh-token-placeholder",
+                now,
+            )],
+            usage_repository,
+        )
+        .await;
+
+    let client = reqwest::Client::new();
+    for (filters, expected_total) in [
+        ("", 11),
+        ("&model=gpt-4.1", 7),
+        ("&provider=Anthropic", 3),
+        ("&model=gpt-4.1&provider=Anthropic", 0),
+        ("&api_format=openai:chat", 11),
+        ("&api_format=grpc", 0),
+    ] {
+        let response = client
+            .get(format!(
+                "{gateway_url}/api/users/me/usage/interval-timeline?hours=24&limit=100{filters}"
+            ))
+            .header("authorization", format!("Bearer {access_token}"))
+            .header(
+                "x-client-device-id",
+                "device-users-me-usage-timeline-filters",
+            )
+            .header("user-agent", "AetherTest/1.0")
+            .send()
+            .await
+            .expect("timeline request should succeed");
+        assert_eq!(response.status(), StatusCode::OK, "{filters}");
+        let payload: serde_json::Value = response.json().await.expect("timeline json should parse");
+        assert_eq!(
+            payload["total_points"], expected_total,
+            "filters: {filters}"
+        );
+        assert_eq!(payload["truncated"], json!(false), "filters: {filters}");
+    }
+
+    // model 筛选后，散点只保留该模型的请求
+    let filtered: serde_json::Value = client
+        .get(format!(
+            "{gateway_url}/api/users/me/usage/interval-timeline?hours=24&limit=100&model=gpt-4.1"
+        ))
+        .header("authorization", format!("Bearer {access_token}"))
+        .header(
+            "x-client-device-id",
+            "device-users-me-usage-timeline-filters",
+        )
+        .header("user-agent", "AetherTest/1.0")
+        .send()
+        .await
+        .expect("filtered timeline request should succeed")
+        .json()
+        .await
+        .expect("filtered timeline json should parse");
+    for point in filtered["points"].as_array().expect("points array") {
+        assert_eq!(point["model"], "gpt-4.1");
+    }
+
+    assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
+
+    gateway_handle.abort();
+    upstream_handle.abort();
+}
+
+#[tokio::test]
 async fn gateway_returns_service_unavailable_for_users_me_usage_routes_without_reader() {
     let now = Utc::now();
     let user = sample_auth_user(now);

@@ -3627,6 +3627,75 @@ async fn gateway_samples_admin_usage_cache_affinity_interval_timeline_across_ful
 }
 
 #[tokio::test]
+async fn gateway_filters_admin_usage_cache_affinity_interval_timeline_by_model_and_provider() {
+    let (upstream_url, upstream_hits, upstream_handle) =
+        start_usage_upstream("/api/admin/usage/cache-affinity/interval-timeline").await;
+    let mut seeded = Vec::new();
+    for index in 0..12_i64 {
+        let (model, provider) = if index < 8 {
+            ("gpt-5", "OpenAI")
+        } else {
+            ("claude-3-7", "Anthropic")
+        };
+        seeded.push(sample_usage_row(
+            &format!("usage-{index}"),
+            &format!("req-{index}"),
+            Some("user-1"),
+            Some("key-1"),
+            Some("primary"),
+            provider,
+            model,
+            "completed",
+            10,
+            2,
+            0.01,
+            0.012,
+            recent_unix_secs((13 - index) as u64),
+        ));
+    }
+    let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(seeded));
+    let user_repository = Arc::new(InMemoryUserReadRepository::seed(vec![sample_user_summary(
+        "user-1", "alice",
+    )]));
+    let gateway = build_router_with_state(
+        AppState::new()
+            .expect("gateway should build")
+            .with_data_state_for_tests(
+                GatewayDataState::with_usage_reader_for_tests(usage_repository)
+                    .with_user_reader(user_repository),
+            ),
+    );
+    let (gateway_url, gateway_handle) = start_server(gateway).await;
+
+    let client = reqwest::Client::new();
+    for (filters, expected_total) in [
+        ("", 11),
+        ("&model=gpt-5", 7),
+        ("&provider=Anthropic", 3),
+        ("&model=gpt-5&provider=Anthropic", 0),
+    ] {
+        let response = admin_request(client.get(format!(
+            "{gateway_url}/api/admin/usage/cache-affinity/interval-timeline?hours=24&limit=100&include_user_info=true{filters}"
+        )))
+        .send()
+        .await
+        .expect("request should succeed");
+        assert_eq!(response.status(), StatusCode::OK, "{filters}");
+        let payload: serde_json::Value = response.json().await.expect("json body should parse");
+        assert_eq!(
+            payload["total_points"], expected_total,
+            "filters: {filters}"
+        );
+        assert_eq!(payload["truncated"], json!(false), "filters: {filters}");
+    }
+
+    assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
+
+    gateway_handle.abort();
+    upstream_handle.abort();
+}
+
+#[tokio::test]
 async fn gateway_handles_admin_usage_cache_affinity_interval_timeline_with_auth_user_fallback() {
     let (_upstream_url, upstream_hits, upstream_handle) =
         start_usage_upstream("/api/admin/usage/cache-affinity/interval-timeline").await;

@@ -43,6 +43,9 @@
           :is-admin="isAdminPage"
           :hours="intervalTimelineHours"
           :refresh-interval-ms="0"
+          :model="intervalTimelineModel"
+          :provider="intervalTimelineProvider"
+          :api-format="intervalTimelineApiFormat"
         />
       </div>
 
@@ -346,9 +349,22 @@ const activityHeatmapData = ref<ActivityHeatmap | null>(null)
 const isLoadingHeatmap = ref(false)
 const heatmapError = ref(false)
 const intervalTimelineHours = computed(() => getIntervalTimelineHours(timeRange.value))
+// 下方使用记录的筛选条件同步作用于请求间隔时间线（'__all__' 表示不筛选）
+const intervalTimelineModel = computed(() => (filterModel.value !== '__all__' ? filterModel.value : ''))
+const intervalTimelineProvider = computed(() => (filterProvider.value !== '__all__' ? filterProvider.value : ''))
+const intervalTimelineApiFormat = computed(() => (filterApiFormat.value !== '__all__' ? filterApiFormat.value : ''))
+const intervalTimelineActiveFilters = computed(() =>
+  [
+    intervalTimelineModel.value && `模型 ${intervalTimelineModel.value}`,
+    intervalTimelineProvider.value && `提供商 ${intervalTimelineProvider.value}`,
+    intervalTimelineApiFormat.value && `API格式 ${intervalTimelineApiFormat.value}`,
+  ].filter(Boolean) as string[]
+)
 const intervalTimelineTitle = computed(() => {
   const baseTitle = isAdminPage.value ? overviewT('全站最近请求间隔', 'Site-wide recent request intervals') : '我的请求间隔'
-  return `${baseTitle}（${formatIntervalTimelineWindow(intervalTimelineHours.value)}）`
+  const windowText = formatIntervalTimelineWindow(intervalTimelineHours.value)
+  const filterText = intervalTimelineActiveFilters.value.length > 0 ? `，${intervalTimelineActiveFilters.value.join(' / ')}` : ''
+  return `${baseTitle}（${windowText}${filterText}）`
 })
 const ADMIN_ANALYTICS_REFRESH_INTERVAL = 60000
 let adminAnalyticsRefreshInFlight: Promise<void> | null = null

@@ -4965,6 +4965,24 @@ WITH filtered_usage AS (
                 .push("\"usage\".api_key_id = ")
                 .push_bind(api_key_id.to_string());
         }
+        if let Some(model) = query.model.as_deref() {
+            builder.push(if has_where { " AND " } else { " WHERE " });
+            builder
+                .push("\"usage\".model = ")
+                .push_bind(model.to_string());
+        }
+        if let Some(provider) = query.provider.as_deref() {
+            builder.push(if has_where { " AND " } else { " WHERE " });
+            builder
+                .push("\"usage\".provider_name = ")
+                .push_bind(provider.to_string());
+        }
+        if let Some(api_format) = query.api_format.as_deref() {
+            builder.push(if has_where { " AND " } else { " WHERE " });
+            builder
+                .push("\"usage\".api_format = ")
+                .push_bind(api_format.to_string());
+        }
         builder.push(
             r#"
 ),

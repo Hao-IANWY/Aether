@@ -972,6 +972,21 @@ fn usage_matches_cache_affinity_interval_query(
             return None;
         }
     }
+    if let Some(model) = query.model.as_deref() {
+        if item.model != model {
+            return None;
+        }
+    }
+    if let Some(provider) = query.provider.as_deref() {
+        if item.provider_name != provider {
+            return None;
+        }
+    }
+    if let Some(api_format) = query.api_format.as_deref() {
+        if item.api_format.as_deref() != Some(api_format) {
+            return None;
+        }
+    }
     match query.group_by {
         UsageCacheAffinityIntervalGroupBy::User => item.user_id.clone(),
         UsageCacheAffinityIntervalGroupBy::ApiKey => item.api_key_id.clone(),

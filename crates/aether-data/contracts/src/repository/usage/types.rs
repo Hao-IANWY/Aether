@@ -1484,6 +1484,9 @@ pub struct UsageCacheAffinityIntervalQuery {
     pub group_by: UsageCacheAffinityIntervalGroupBy,
     pub user_id: Option<String>,
     pub api_key_id: Option<String>,
+    pub model: Option<String>,
+    pub provider: Option<String>,
+    pub api_format: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]

@@ -335,12 +335,16 @@ export const cacheAnalysisApi = {
    * 获取请求间隔时间线数据
    *
    * @param params.include_user_info 是否包含用户信息（用于管理员多用户视图）
+   * @param params.model/provider/api_format 可选筛选，含义与使用记录列表的同名筛选一致
    */
   async getIntervalTimeline(params?: {
     hours?: number
     limit?: number
     user_id?: string
     include_user_info?: boolean
+    model?: string
+    provider?: string
+    api_format?: string
   }): Promise<IntervalTimelineResponse> {
     const cacheKey = buildCacheKey('cache-affinity:interval-timeline', params as Record<string, unknown> | undefined)
     return cachedRequest(

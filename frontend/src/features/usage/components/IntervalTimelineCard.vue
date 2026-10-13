@@ -75,10 +75,18 @@ const props = withDefaults(defineProps<{
   hours?: number
   refreshIntervalMs?: number
   data?: IntervalTimelineResponse | null
+  model?: string
+  provider?: string
+  apiFormat?: string
+  userId?: string
 }>(), {
   hours: 24,  // 默认当天
   refreshIntervalMs: 30000,
   data: undefined,
+  model: '',
+  provider: '',
+  apiFormat: '',
+  userId: '',
 })
 
 const loading = ref(false)
@@ -317,12 +325,19 @@ async function loadData() {
   loading.value = true
   try {
     const limit = props.isAdmin ? ADMIN_TIMELINE_LIMIT : USER_TIMELINE_LIMIT
+    const filters = {
+      model: props.model || undefined,
+      provider: props.provider || undefined,
+      api_format: props.apiFormat || undefined,
+    }
     if (props.isAdmin) {
       // 管理员：获取所有用户数据（按比例采样）
       const data = await cacheAnalysisApi.getIntervalTimeline({
         hours: props.hours,
         include_user_info: true,
         limit,
+        user_id: props.userId || undefined,
+        ...filters,
       })
       if (requestId !== loadRequestId) return
       timelineData.value = data
@@ -331,6 +346,7 @@ async function loadData() {
       const data = await meApi.getIntervalTimeline({
         hours: props.hours,
         limit,
+        ...filters,
       })
       if (requestId !== loadRequestId) return
       timelineData.value = data
@@ -378,11 +394,22 @@ function handleVisibilityChange() {
   scheduleNextRefresh()
 }
 
-watch([() => props.hours, () => props.isAdmin, () => props.data], () => {
-  void loadData()
-  stopRefreshTimer()
-  scheduleNextRefresh()
-})
+watch(
+  [
+    () => props.hours,
+    () => props.isAdmin,
+    () => props.data,
+    () => props.model,
+    () => props.provider,
+    () => props.apiFormat,
+    () => props.userId,
+  ],
+  () => {
+    void loadData()
+    stopRefreshTimer()
+    scheduleNextRefresh()
+  }
+)
 
 onBeforeUnmount(() => {
   loadRequestId++

@@ -52,12 +52,18 @@ pub(super) async fn build_admin_usage_cache_affinity_interval_timeline_response(
     };
     let user_id = query_param_value(query, "user_id");
     let include_user_info = query_param_bool(query, "include_user_info", false);
+    let model = query_param_value(query, "model");
+    let provider = query_param_value(query, "provider");
+    let api_format = query_param_value(query, "api_format");
     let intervals = list_usage_cache_affinity_intervals(
         state,
         hours,
         UsageCacheAffinityIntervalGroupBy::User,
         user_id.as_deref(),
         None,
+        model.as_deref(),
+        provider.as_deref(),
+        api_format.as_deref(),
     )
     .await?;
     let mut grouped: BTreeMap<String, Vec<serde_json::Value>> = BTreeMap::new();
